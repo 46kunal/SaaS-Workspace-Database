@@ -1,0 +1,1 @@
+-- TODO: procedure generate_invoice(tenant_id) to calculate usage and create invoice

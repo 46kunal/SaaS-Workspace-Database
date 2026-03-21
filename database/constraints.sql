@@ -1,0 +1,1 @@
+-- TODO: add NOT NULL, UNIQUE, and CHECK constraints for all tables

@@ -1,0 +1,1 @@
+-- TODO: add indexes for tenant_id and date columns

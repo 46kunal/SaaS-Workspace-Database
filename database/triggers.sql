@@ -1,0 +1,2 @@
+-- TODO: add trigger to enforce usage limits per plan
+-- TODO: add trigger to write audit logs on key tables
