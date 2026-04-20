@@ -1,179 +1,164 @@
 -- ============================================================
 --  SaaS Workspace Database
 --  File: indexes.sql
---  Description: Strategic indexing for all core tables
---               Covers lookups, foreign keys, filtering,
---               and covering indexes for hot query paths
+--  Description: Indexes for all tables in schema.sql
 -- ============================================================
-
-
--- ============================================================
---  TABLE: workspaces
--- ============================================================
-
--- Fast lookup of all workspaces belonging to an owner
-CREATE INDEX idx_workspaces_owner
-    ON workspaces (owner_id);
-
--- Filter workspaces by subscription plan
-CREATE INDEX idx_workspaces_plan
-    ON workspaces (plan_id);
-
--- Composite: find active workspaces created after a date
-CREATE INDEX idx_workspaces_created
-    ON workspaces (created_at DESC);
-
-
--- ============================================================
---  TABLE: users
--- ============================================================
-
--- Login & uniqueness enforcement
-CREATE UNIQUE INDEX uidx_users_email
-    ON users (email);
-
--- Soft-delete or status filtering
-CREATE INDEX idx_users_status
-    ON users (status, created_at DESC);
 
 
 -- ============================================================
 --  TABLE: plans
 -- ============================================================
 
--- Filter plans by billing cycle (monthly / annual)
-CREATE INDEX idx_plans_billing_cycle
-    ON plans (billing_cycle);
-
--- Covering index for plan-price queries (avoids table hit)
-CREATE INDEX idx_plans_cover_price
-    ON plans (id, name, price_per_seat, billing_cycle);
+-- name already has UNIQUE constraint (acts as an index)
+-- Speed up filtering by price range (e.g. find affordable plans)
+CREATE INDEX idx_plans_price
+    ON plans (price_per_month);
 
 
 -- ============================================================
---  TABLE: workspace_users  (membership / seat table)
+--  TABLE: tenants
 -- ============================================================
 
--- Primary lookup: all members of a workspace
-CREATE INDEX idx_wu_workspace
-    ON workspace_users (workspace_id, is_active);
+-- domain already has UNIQUE constraint (acts as an index)
 
--- Reverse lookup: all workspaces a user belongs to
-CREATE INDEX idx_wu_user
-    ON workspace_users (user_id, is_active);
+-- All tenants on a specific plan (used in billing reports)
+CREATE INDEX idx_tenants_plan
+    ON tenants (plan_id);
 
--- Composite for billing cursor (used inside generate_invoice)
---   WHERE workspace_id = ? AND is_active = 1 AND joined_at <= ?
-CREATE INDEX idx_wu_billing
-    ON workspace_users (workspace_id, is_active, joined_at);
+-- Order tenants by signup date
+CREATE INDEX idx_tenants_created
+    ON tenants (created_at DESC);
 
--- Role-based access queries
-CREATE INDEX idx_wu_role
-    ON workspace_users (workspace_id, role, is_active);
+
+-- ============================================================
+--  TABLE: users
+-- ============================================================
+
+-- (tenant_id, email) already has UNIQUE constraint
+
+-- All users belonging to a tenant (most common query)
+CREATE INDEX idx_users_tenant
+    ON users (tenant_id);
+
+-- Filter users by role within a tenant (e.g. find all admins)
+CREATE INDEX idx_users_tenant_role
+    ON users (tenant_id, role);
+
+
+-- ============================================================
+--  TABLE: workspaces
+-- ============================================================
+
+-- All workspaces under a tenant
+CREATE INDEX idx_workspaces_tenant
+    ON workspaces (tenant_id);
+
+-- Who created a workspace (audit / user profile page)
+CREATE INDEX idx_workspaces_created_by
+    ON workspaces (created_by);
+
+-- Covering index for workspace list view (no table hit needed)
+CREATE INDEX idx_workspaces_cover
+    ON workspaces (tenant_id, id, name, created_at);
+
+
+-- ============================================================
+--  TABLE: deployments
+-- ============================================================
+
+-- All deployments for a tenant
+CREATE INDEX idx_deployments_tenant
+    ON deployments (tenant_id);
+
+-- All deployments inside a workspace
+CREATE INDEX idx_deployments_workspace
+    ON deployments (workspace_id);
+
+-- Filter deployments by status (e.g. find all 'pending' ones)
+CREATE INDEX idx_deployments_status
+    ON deployments (tenant_id, status);
+
+-- Latest deployments first
+CREATE INDEX idx_deployments_deployed_at
+    ON deployments (deployed_at DESC);
+
+
+-- ============================================================
+--  TABLE: resource_usage
+-- ============================================================
+
+-- (workspace_id, usage_date) already has UNIQUE constraint
+
+-- Billing query: sum usage for a tenant over a date range
+--   Used directly inside generate_invoice procedure
+CREATE INDEX idx_resource_usage_tenant_date
+    ON resource_usage (tenant_id, usage_date);
+
+-- Usage per workspace over time
+CREATE INDEX idx_resource_usage_workspace_date
+    ON resource_usage (workspace_id, usage_date);
 
 
 -- ============================================================
 --  TABLE: invoices
 -- ============================================================
 
--- Unique invoice number (human-readable reference)
-CREATE UNIQUE INDEX uidx_invoices_number
-    ON invoices (invoice_number);
+-- All invoices for a tenant (most common read path)
+CREATE INDEX idx_invoices_tenant
+    ON invoices (tenant_id, created_at DESC);
 
--- Fetch all invoices for a workspace (most common read path)
-CREATE INDEX idx_invoices_workspace
-    ON invoices (workspace_id, created_at DESC);
+-- Duplicate period check used in generate_invoice
+--   Unique constraint to enforce no double billing
+CREATE UNIQUE INDEX uidx_invoices_tenant_period
+    ON invoices (tenant_id, period_start, period_end);
 
--- Billing-period uniqueness per workspace
---   (mirrors duplicate-check in generate_invoice)
-CREATE UNIQUE INDEX uidx_invoices_period
-    ON invoices (workspace_id, billing_period_start, billing_period_end);
+-- Filter unpaid invoices (payment dashboard)
+CREATE INDEX idx_invoices_status
+    ON invoices (status, created_at DESC);
 
--- Payment dashboard: filter by status + due date
-CREATE INDEX idx_invoices_status_due
-    ON invoices (status, due_date);
-
--- Covering index for invoice list view (no table hit)
---   Columns: id, workspace_id, invoice_number, status, total_amount, due_date
-CREATE INDEX idx_invoices_list_cover
-    ON invoices (workspace_id, status, due_date, total_amount, invoice_number);
-
--- Created-by audit trail
-CREATE INDEX idx_invoices_created_by
-    ON invoices (created_by, created_at DESC);
+-- Covering index for invoice list view
+CREATE INDEX idx_invoices_cover
+    ON invoices (tenant_id, status, period_start, period_end, total_amount);
 
 
 -- ============================================================
---  TABLE: invoice_items
+--  TABLE: audit_logs
 -- ============================================================
 
--- Primary lookup: all line items for an invoice
-CREATE INDEX idx_invoice_items_invoice
-    ON invoice_items (invoice_id);
+-- All logs for a tenant (most common lookup)
+CREATE INDEX idx_audit_tenant
+    ON audit_logs (tenant_id, created_at DESC);
 
--- Revenue reporting: sum amounts across invoices
---   Covering index so SUM(amount) needs no table hit
-CREATE INDEX idx_invoice_items_cover
-    ON invoice_items (invoice_id, amount);
+-- Filter logs by action type (e.g. find all 'generate_invoice' events)
+CREATE INDEX idx_audit_action
+    ON audit_logs (action, created_at DESC);
 
+-- Filter logs by entity (e.g. all changes to 'invoices' table)
+CREATE INDEX idx_audit_entity
+    ON audit_logs (entity, tenant_id);
 
--- ============================================================
---  TABLE: payments
--- ============================================================
-
--- Look up all payments for an invoice
-CREATE INDEX idx_payments_invoice
-    ON payments (invoice_id, status);
-
--- Financial reporting by date range
-CREATE INDEX idx_payments_paid_at
-    ON payments (paid_at DESC, status);
-
--- Payment method analytics
-CREATE INDEX idx_payments_method
-    ON payments (payment_method, paid_at DESC);
-
--- Covering index for payment reconciliation dashboard
-CREATE INDEX idx_payments_reconcile
-    ON payments (invoice_id, status, amount, paid_at);
+-- GIN index on JSONB details column for fast key/value search
+--   e.g. WHERE details @> '{"invoice_id": 5}'
+CREATE INDEX idx_audit_details_gin
+    ON audit_logs USING GIN (details);
 
 
 -- ============================================================
---  FULL-TEXT SEARCH (optional – MySQL / MariaDB)
--- ============================================================
--- Enables fast keyword search across invoice items
-CREATE FULLTEXT INDEX ft_invoice_items_desc
-    ON invoice_items (description);
-
--- Workspace name search
-CREATE FULLTEXT INDEX ft_workspaces_name
-    ON workspaces (name);
-
-
--- ============================================================
---  VERIFICATION QUERIES
---  Run these after creation to confirm indexes are in place
+--  VERIFY — run these after applying indexes
 -- ============================================================
 /*
-SHOW INDEX FROM workspaces;
-SHOW INDEX FROM users;
-SHOW INDEX FROM plans;
-SHOW INDEX FROM workspace_users;
-SHOW INDEX FROM invoices;
-SHOW INDEX FROM invoice_items;
-SHOW INDEX FROM payments;
+-- List all indexes on a table
+SELECT indexname, indexdef
+  FROM pg_indexes
+ WHERE tablename = 'invoices';
 
--- Confirm the billing cursor path uses idx_wu_billing
-EXPLAIN SELECT *
-  FROM workspace_users
- WHERE workspace_id = 42
-   AND is_active    = 1
-   AND joined_at   <= '2025-04-30';
+-- Check if generate_invoice billing query uses the right index
+EXPLAIN ANALYZE
+SELECT COALESCE(SUM(api_calls), 0), COALESCE(SUM(storage_mb), 0)
+  FROM resource_usage
+ WHERE tenant_id  = 1
+   AND usage_date >= '2025-04-01'
+   AND usage_date <= '2025-04-30';
 
--- Confirm invoice list uses covering index
-EXPLAIN SELECT id, invoice_number, status, total_amount, due_date
-  FROM invoices
- WHERE workspace_id = 42
-   AND status = 'pending'
- ORDER BY due_date;
+-- Should show: Index Scan using idx_resource_usage_tenant_date
 */
