@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - SaaS Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dashboard-page">
+    <header class="header">
+        <div class="container">
+            <div class="flex flex-between flex-center">
+                <div>
+                    <h1>SaaS Workspace Platform</h1>
+                    <div style="color: var(--gray-600); margin-top: 4px;">Tenant settings and data management</div>
+                </div>
+                <div id="tenant-info" style="text-align: right;">
+                    <span id="tenant-name">Loading...</span>
+                    <button class="btn btn-sm btn-primary" onclick="window.location.href='index.html'" style="margin-left: 12px;">+ New Tenant</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchTenant()" style="margin-left: 12px;">Switch</button>
+                    <button class="btn btn-sm btn-outline" onclick="window.location.href='dashboard.html'" style="margin-left: 8px;">Dashboard</button>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="workspaces.html">Workspaces</a>
+                <a href="users.html">Users</a>
+                <a href="usage.html">Usage</a>
+                <a href="invoices.html">Invoices</a>
+                <a href="settings.html" class="active">Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card hero-card mb-4">
+            <div class="flex flex-between flex-center gap-4 hero-card-inner">
+                <div>
+                    <div class="eyebrow">Dedicated settings screen</div>
+                    <h2 style="margin: 6px 0 10px; border: none; padding: 0;">Keep tenant-level changes in one place</h2>
+                    <p class="hero-copy">Rename the tenant, switch plans, update the domain, or delete the tenant from a single focused page.</p>
+                </div>
+                <div class="hero-points">
+                    <div class="hero-point"><strong>Tenant profile</strong><span>Edit the organization name and domain.</span></div>
+                    <div class="hero-point"><strong>Plan selection</strong><span>Choose a different plan from the current catalog.</span></div>
+                    <div class="hero-point"><strong>Destructive actions</strong><span>Delete the tenant only from this dedicated page.</span></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <h2>Tenant Details</h2>
+                <div id="tenant-settings-alert"></div>
+                <form id="tenant-settings-form">
+                    <div class="form-group">
+                        <label for="tenant-settings-name">Organization Name</label>
+                        <input type="text" id="tenant-settings-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tenant-settings-domain">Domain</label>
+                        <input type="text" id="tenant-settings-domain" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tenant-settings-plan">Plan</label>
+                        <select id="tenant-settings-plan" required>
+                            <option value="">Loading plans...</option>
+                        </select>
+                    </div>
+                    <div class="modal-actions" style="justify-content: flex-start;">
+                        <button type="submit" class="btn btn-primary">Save Settings</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>Tenant Info</h2>
+                <div id="tenant-summary" class="mb-4"></div>
+                <div class="alert alert-warning" style="margin-bottom: 12px;">
+                    Deleting a tenant removes all related users, workspaces, deployments, usage, invoices, and logs.
+                </div>
+                <button type="button" class="btn btn-danger" onclick="removeCurrentTenant()" style="width: 100%;">Delete This Tenant</button>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        let currentTenantId = null;
+        let currentTenant = null;
+        let availablePlans = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentTenantId = getCurrentTenantId();
+            if (!currentTenantId) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                currentTenant = await api.getTenant(currentTenantId);
+                availablePlans = await api.getPlans();
+                document.getElementById('tenant-name').textContent = currentTenant.name;
+                renderTenantSummary();
+                openTenantSettings();
+            } catch (error) {
+                console.error('Failed to load settings page:', error);
+            }
+        });
+
+        function renderTenantSummary() {
+            document.getElementById('tenant-summary').innerHTML = `
+                <p><strong>ID:</strong> ${currentTenant.id}</p>
+                <p><strong>Name:</strong> ${currentTenant.name}</p>
+                <p><strong>Domain:</strong> ${currentTenant.domain || '-'}</p>
+                <p><strong>Plan ID:</strong> ${currentTenant.plan_id}</p>
+            `;
+        }
+
+        function openTenantSettings() {
+            const planSelect = document.getElementById('tenant-settings-plan');
+            planSelect.innerHTML = '<option value="">Select a plan</option>';
+
+            availablePlans.forEach((plan) => {
+                planSelect.innerHTML += `<option value="${plan.id}">${plan.name} - $${plan.price_per_month}/mo</option>`;
+            });
+
+            document.getElementById('tenant-settings-name').value = currentTenant.name || '';
+            document.getElementById('tenant-settings-domain').value = currentTenant.domain || '';
+            document.getElementById('tenant-settings-plan').value = currentTenant.plan_id || '';
+        }
+
+        document.getElementById('tenant-settings-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('tenant-settings-name').value.trim();
+            const domain = document.getElementById('tenant-settings-domain').value.trim();
+            const planId = parseInt(document.getElementById('tenant-settings-plan').value, 10);
+
+            try {
+                currentTenant = await api.updateTenant(currentTenantId, {
+                    name,
+                    domain,
+                    plan_id: planId
+                });
+                document.getElementById('tenant-name').textContent = currentTenant.name;
+                renderTenantSummary();
+                showAlert('tenant-settings-alert', 'Tenant settings updated successfully.', 'success');
+            } catch (error) {
+                showAlert('tenant-settings-alert', error.message, 'error');
+            }
+        });
+
+        async function removeCurrentTenant() {
+            if (!confirm(`Delete tenant ${currentTenant.name} and all of its data? This cannot be undone.`)) return;
+            try {
+                await api.deleteTenant(currentTenantId);
+                localStorage.removeItem('currentTenantId');
+                window.location.href = 'index.html';
+            } catch (error) {
+                showAlert('tenant-settings-alert', error.message, 'error');
+            }
+        }
+
+        function switchTenant() {
+            localStorage.removeItem('currentTenantId');
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

@@ -1,13 +1,224 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>SaaS Scaffold</title>
-	<link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaaS Workspace - Register</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-	<button id="ping">Test API</button>
-	<script src="script.js"></script>
+<body class="register-page">
+    <header class="header">
+        <div class="container">
+            <h1>SaaS Workspace Platform</h1>
+            <nav class="nav">
+                <a href="index.html" class="active">Register</a>
+                <a href="dashboard.html">Dashboard</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <div class="grid grid-2">
+            <!-- Registration Form -->
+            <div class="card">
+                <h2>Register Your Organization</h2>
+                <div id="register-alert"></div>
+                <form id="register-form">
+                    <div class="form-group">
+                        <label for="tenant-name">Organization Name</label>
+                        <input type="text" id="tenant-name" placeholder="Acme Corporation" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tenant-domain">Domain</label>
+                        <input type="text" id="tenant-domain" placeholder="acme.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="plan-select">Select Plan</label>
+                        <select id="plan-select" required>
+                            <option value="">Loading plans...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-email">Admin Email</label>
+                        <input type="email" id="admin-email" placeholder="admin@acme.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="admin-name">Admin Name</label>
+                        <input type="text" id="admin-name" placeholder="John Doe" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Register Organization</button>
+                </form>
+            </div>
+
+            <!-- Plans Info -->
+            <div>
+                <div class="card">
+                    <h2>Available Plans</h2>
+                    <div id="plans-list">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading plans...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Existing Tenants</h2>
+                    <div id="tenants-list">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                            <p>Loading tenants...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        // Load plans and tenants on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPlans();
+            loadTenants();
+        });
+
+        // Handle registration form
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('tenant-name').value;
+            const domain = document.getElementById('tenant-domain').value;
+            const planId = document.getElementById('plan-select').value;
+            const adminEmail = document.getElementById('admin-email').value;
+            const adminName = document.getElementById('admin-name').value;
+
+            try {
+                // Create tenant
+                const tenant = await api.createTenant(name, domain, parseInt(planId));
+
+                // Create admin user; if this fails, remove the tenant to avoid partial registration
+                try {
+                    await api.createUser(tenant.id, adminEmail, adminName, 'admin');
+                } catch (userError) {
+                    try {
+                        await api.deleteTenant(tenant.id);
+                    } catch {
+                        // Best effort cleanup; surface the original user creation error below.
+                    }
+                    throw userError;
+                }
+
+                showAlert('register-alert', 'Organization registered successfully! Redirecting to dashboard...', 'success');
+
+                // Store tenant ID and redirect
+                localStorage.setItem('currentTenantId', tenant.id);
+                setTimeout(() => {
+                    window.location.href = 'dashboard.html';
+                }, 1500);
+            } catch (error) {
+                showAlert('register-alert', error.message, 'error');
+            }
+        });
+
+        async function loadPlans() {
+            try {
+                const plans = await api.getPlans();
+                const select = document.getElementById('plan-select');
+                const plansList = document.getElementById('plans-list');
+
+                // Update select
+                select.innerHTML = '<option value="">Select a plan</option>';
+                plans.forEach(plan => {
+                    select.innerHTML += `<option value="${plan.id}">${plan.name} - $${plan.price_per_month}/mo</option>`;
+                });
+
+                // Update plans display
+                if (plans.length === 0) {
+                    plansList.innerHTML = '<div class="empty-state"><p>No plans available</p></div>';
+                } else {
+                    plansList.innerHTML = plans.map(plan => `
+                        <div style="padding: 12px; border-bottom: 1px solid var(--gray-200);">
+                            <strong>${plan.name}</strong>
+                            <span class="badge badge-info" style="margin-left: 8px;">$${plan.price_per_month}/mo</span>
+                            <div style="font-size: 0.875rem; color: var(--gray-600); margin-top: 4px;">
+                                API: ${plan.api_limit.toLocaleString()} calls | Storage: ${plan.storage_limit_mb} MB
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                document.getElementById('plans-list').innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+            }
+        }
+
+        async function loadTenants() {
+            try {
+                const tenants = await api.getTenants();
+                const container = document.getElementById('tenants-list');
+
+                if (tenants.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><p>No tenants registered yet</p></div>';
+                } else {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Domain</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tenants.map(t => `
+                                        <tr>
+                                            <td>${t.name}</td>
+                                            <td>${t.domain}</td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline" onclick="selectTenant(${t.id})">
+                                                    Select
+                                                </button>
+                                                <button class="btn btn-sm btn-danger" onclick="removeTenant(${t.id}, '${t.name.replace(/'/g, "\\'")}')" style="margin-left: 8px;">
+                                                    Delete
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('tenants-list').innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+            }
+        }
+
+        function selectTenant(tenantId) {
+            localStorage.setItem('currentTenantId', tenantId);
+            window.location.href = 'dashboard.html';
+        }
+
+        async function removeTenant(tenantId, tenantName) {
+            if (!confirm(`Delete tenant "${tenantName}" and all related data?`)) {
+                return;
+            }
+
+            try {
+                await api.deleteTenant(tenantId);
+
+                if (localStorage.getItem('currentTenantId') === String(tenantId)) {
+                    localStorage.removeItem('currentTenantId');
+                }
+
+                await loadTenants();
+                await loadPlans();
+                showAlert('register-alert', 'Tenant deleted successfully.', 'success');
+            } catch (error) {
+                showAlert('register-alert', error.message, 'error');
+            }
+        }
+    </script>
 </body>
 </html>

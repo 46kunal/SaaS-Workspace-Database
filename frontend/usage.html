@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Usage - SaaS Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dashboard-page">
+    <header class="header">
+        <div class="container">
+            <div class="flex flex-between flex-center">
+                <div>
+                    <h1>SaaS Workspace Platform</h1>
+                    <div style="color: var(--gray-600); margin-top: 4px;">Usage tracking and activity history</div>
+                </div>
+                <div id="tenant-info" style="text-align: right;">
+                    <span id="tenant-name">Loading...</span>
+                    <button class="btn btn-sm btn-primary" onclick="window.location.href='index.html'" style="margin-left: 12px;">+ New Tenant</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchTenant()" style="margin-left: 12px;">Switch</button>
+                    <button class="btn btn-sm btn-outline" onclick="window.location.href='settings.html'" style="margin-left: 8px;">Settings</button>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="workspaces.html">Workspaces</a>
+                <a href="users.html">Users</a>
+                <a href="usage.html" class="active">Usage</a>
+                <a href="invoices.html">Invoices</a>
+                <a href="settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card hero-card mb-4">
+            <div class="flex flex-between flex-center gap-4 hero-card-inner">
+                <div>
+                    <div class="eyebrow">Dedicated usage screen</div>
+                    <h2 style="margin: 6px 0 10px; border: none; padding: 0;">Track usage without crowding the rest of the app</h2>
+                    <p class="hero-copy">Record usage events here and review them with filters and totals. The rest of the frontend stays focused on its own page.</p>
+                </div>
+                <div class="hero-points">
+                    <div class="hero-point"><strong>Record usage</strong><span>Submit API calls, storage, and date for a workspace.</span></div>
+                    <div class="hero-point"><strong>Filter history</strong><span>Review usage within any date range.</span></div>
+                    <div class="hero-point"><strong>Billing link</strong><span>Usage feeds invoice generation and billing totals.</span></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-2 mb-4">
+            <div class="stat-card">
+                <h3>API Calls</h3>
+                <div class="value" id="usage-api-total">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Storage Used</h3>
+                <div class="value" id="usage-storage-total">-</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Record Usage</h2>
+                </div>
+                <form id="usage-form">
+                    <div class="form-group">
+                        <label for="usage-workspace">Workspace</label>
+                        <select id="usage-workspace" required></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="usage-date">Usage Date</label>
+                        <input type="date" id="usage-date" required>
+                    </div>
+                    <div class="grid grid-2">
+                        <div class="form-group">
+                            <label for="usage-api">API Calls</label>
+                            <input type="number" id="usage-api" min="0" step="1" value="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="usage-storage">Storage MB</label>
+                            <input type="number" id="usage-storage" min="0" step="0.01" value="0" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Record Usage</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Usage Filters</h2>
+                </div>
+                <form id="usage-filter-form">
+                    <div class="form-group">
+                        <label for="usage-start-date">Start Date</label>
+                        <input type="date" id="usage-start-date">
+                    </div>
+                    <div class="form-group">
+                        <label for="usage-end-date">End Date</label>
+                        <input type="date" id="usage-end-date">
+                    </div>
+                    <div class="modal-actions" style="margin-top: 0; justify-content: flex-start;">
+                        <button type="button" class="btn btn-outline" onclick="clearUsageFilters()">Clear</button>
+                        <button type="submit" class="btn btn-primary">Apply Filters</button>
+                    </div>
+                </form>
+                <div id="usage-summary" class="mt-4"></div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="flex flex-between flex-center mb-4">
+                <h2 style="margin: 0; border: none; padding: 0;">Usage History</h2>
+            </div>
+            <div id="usage-list">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        let currentTenantId = null;
+        let currentTenant = null;
+        let workspaceOptions = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentTenantId = getCurrentTenantId();
+            if (!currentTenantId) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                currentTenant = await api.getTenant(currentTenantId);
+                document.getElementById('tenant-name').textContent = currentTenant.name;
+                const now = new Date();
+                document.getElementById('usage-date').value = now.toISOString().split('T')[0];
+                document.getElementById('usage-start-date').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                document.getElementById('usage-end-date').value = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+                await loadWorkspaces();
+                await loadUsage();
+                await loadSummary();
+            } catch (error) {
+                console.error('Failed to load usage page:', error);
+            }
+        });
+
+        async function loadWorkspaces() {
+            const select = document.getElementById('usage-workspace');
+            workspaceOptions = await api.getWorkspaces(currentTenantId);
+            select.innerHTML = workspaceOptions.length === 0
+                ? '<option value="">No workspaces available</option>'
+                : '<option value="">Select a workspace</option>' + workspaceOptions.map(workspace => `<option value="${workspace.id}">${workspace.name}</option>`).join('');
+        }
+
+        async function loadUsage() {
+            const container = document.getElementById('usage-list');
+            try {
+                const startDate = document.getElementById('usage-start-date').value || null;
+                const endDate = document.getElementById('usage-end-date').value || null;
+                const usage = await api.getUsage(currentTenantId, startDate, endDate);
+                await renderUsage(usage, container);
+                await updateUsageTotals(usage);
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+                document.getElementById('usage-summary').innerHTML = '';
+            }
+        }
+
+        async function loadSummary() {
+            const startDate = document.getElementById('usage-start-date').value || null;
+            const endDate = document.getElementById('usage-end-date').value || null;
+            const usage = await api.getUsage(currentTenantId, startDate, endDate);
+            await updateUsageTotals(usage);
+        }
+
+        async function updateUsageTotals(usage) {
+            const totalApi = usage.reduce((sum, row) => sum + Number(row.api_calls || 0), 0);
+            const totalStorage = usage.reduce((sum, row) => sum + Number(row.storage_mb || 0), 0);
+            document.getElementById('usage-api-total').textContent = totalApi.toLocaleString();
+            document.getElementById('usage-storage-total').textContent = `${totalStorage.toFixed(2)} MB`;
+            document.getElementById('usage-summary').innerHTML = `
+                <div class="grid grid-2">
+                    <div class="stat-card"><h3>Filtered Calls</h3><div class="value">${totalApi.toLocaleString()}</div></div>
+                    <div class="stat-card"><h3>Filtered Storage</h3><div class="value">${totalStorage.toFixed(2)} MB</div></div>
+                </div>
+            `;
+        }
+
+        async function renderUsage(usage, container) {
+            if (usage.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No usage records</h3><p>Try a wider date range or add usage entries</p></div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr><th>Date</th><th>Workspace</th><th>API Calls</th><th>Storage (MB)</th><th>Recorded At</th></tr>
+                        </thead>
+                        <tbody>
+                            ${usage.map(row => `
+                                <tr>
+                                    <td>${formatDate(row.usage_date)}</td>
+                                    <td>${row.workspace_id}</td>
+                                    <td>${Number(row.api_calls).toLocaleString()}</td>
+                                    <td>${Number(row.storage_mb).toFixed(2)}</td>
+                                    <td>${formatDate(row.recorded_at)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        document.getElementById('usage-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const workspaceId = document.getElementById('usage-workspace').value;
+            const usageDate = document.getElementById('usage-date').value;
+            const apiCalls = Number(document.getElementById('usage-api').value);
+            const storageMb = Number(document.getElementById('usage-storage').value);
+
+            try {
+                await api.recordUsage(currentTenantId, workspaceId, apiCalls, storageMb, usageDate);
+                document.getElementById('usage-api').value = 0;
+                document.getElementById('usage-storage').value = 0;
+                await loadUsage();
+                await loadSummary();
+            } catch (error) {
+                alert('Failed to record usage: ' + error.message);
+            }
+        });
+
+        document.getElementById('usage-filter-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await loadUsage();
+        });
+
+        async function clearUsageFilters() {
+            document.getElementById('usage-start-date').value = '';
+            document.getElementById('usage-end-date').value = '';
+            await loadUsage();
+        }
+
+        function switchTenant() {
+            localStorage.removeItem('currentTenantId');
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

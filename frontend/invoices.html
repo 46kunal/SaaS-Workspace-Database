@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoices - SaaS Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dashboard-page">
+    <header class="header">
+        <div class="container">
+            <div class="flex flex-between flex-center">
+                <div>
+                    <h1>SaaS Workspace Platform</h1>
+                    <div style="color: var(--gray-600); margin-top: 4px;">Invoice generation and billing history</div>
+                </div>
+                <div id="tenant-info" style="text-align: right;">
+                    <span id="tenant-name">Loading...</span>
+                    <button class="btn btn-sm btn-primary" onclick="window.location.href='index.html'" style="margin-left: 12px;">+ New Tenant</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchTenant()" style="margin-left: 12px;">Switch</button>
+                    <button class="btn btn-sm btn-outline" onclick="window.location.href='settings.html'" style="margin-left: 8px;">Settings</button>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="workspaces.html">Workspaces</a>
+                <a href="users.html">Users</a>
+                <a href="usage.html">Usage</a>
+                <a href="invoices.html" class="active">Invoices</a>
+                <a href="settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card hero-card mb-4">
+            <div class="flex flex-between flex-center gap-4 hero-card-inner">
+                <div>
+                    <div class="eyebrow">Dedicated billing screen</div>
+                    <h2 style="margin: 6px 0 10px; border: none; padding: 0;">Generate and manage invoices separately</h2>
+                    <p class="hero-copy">Billing now has its own screen so the dashboard can stay light while invoice creation and status updates stay focused.</p>
+                </div>
+                <div class="hero-points">
+                    <div class="hero-point"><strong>Generate invoice</strong><span>Create a billing record from a chosen period.</span></div>
+                    <div class="hero-point"><strong>Mark paid</strong><span>Update invoice status without touching other pages.</span></div>
+                    <div class="hero-point"><strong>Same backend</strong><span>All requests still use the current tenant and existing routes.</span></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-2 mb-4">
+            <div class="stat-card">
+                <h3>Invoices</h3>
+                <div class="value" id="invoice-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Pending Invoices</h3>
+                <div class="value" id="pending-count">-</div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Generate Invoice</h2>
+                </div>
+                <form id="invoice-form">
+                    <div class="form-group">
+                        <label for="invoice-start">Period Start</label>
+                        <input type="date" id="invoice-start" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="invoice-end">Period End</label>
+                        <input type="date" id="invoice-end" required>
+                    </div>
+                    <button type="submit" class="btn btn-success" style="width: 100%;">Generate Invoice</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Billing Notes</h2>
+                </div>
+                <div class="empty-state">
+                    <h3>Billing is isolated here</h3>
+                    <p>Use this page when you want to review or create invoices without the rest of the workspace tools in the way.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="flex flex-between flex-center mb-4">
+                <h2 style="margin: 0; border: none; padding: 0;">Invoices</h2>
+            </div>
+            <div id="invoices-list">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        let currentTenantId = null;
+        let currentTenant = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentTenantId = getCurrentTenantId();
+            if (!currentTenantId) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                currentTenant = await api.getTenant(currentTenantId);
+                document.getElementById('tenant-name').textContent = currentTenant.name;
+                const now = new Date();
+                document.getElementById('invoice-start').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+                document.getElementById('invoice-end').value = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+                await loadInvoices();
+            } catch (error) {
+                console.error('Failed to load invoices page:', error);
+            }
+        });
+
+        async function loadInvoices() {
+            const container = document.getElementById('invoices-list');
+            try {
+                const invoices = await api.getInvoices(currentTenantId);
+                document.getElementById('invoice-count').textContent = invoices.length;
+                document.getElementById('pending-count').textContent = invoices.filter(invoice => invoice.status === 'pending').length;
+
+                if (invoices.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><h3>No invoices</h3><p>Generate your first invoice</p></div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr><th>ID</th><th>Period</th><th>Amount</th><th>Status</th><th>Actions</th></tr>
+                            </thead>
+                            <tbody>
+                                ${invoices.map(invoice => `
+                                    <tr>
+                                        <td>#${invoice.id}</td>
+                                        <td>${formatDate(invoice.period_start)} - ${formatDate(invoice.period_end)}</td>
+                                        <td><strong>${formatCurrency(invoice.total_amount)}</strong></td>
+                                        <td><span class="badge ${getStatusBadgeClass(invoice.status)}">${invoice.status}</span></td>
+                                        <td>
+                                            ${invoice.status === 'pending' ? `<button class="btn btn-sm btn-success" onclick="markInvoicePaid(${invoice.id})">Mark Paid</button>` : ''}
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+            }
+        }
+
+        document.getElementById('invoice-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const start = document.getElementById('invoice-start').value;
+            const end = document.getElementById('invoice-end').value;
+
+            try {
+                await api.generateInvoice(currentTenantId, start, end);
+                await loadInvoices();
+            } catch (error) {
+                alert('Failed to generate invoice: ' + error.message);
+            }
+        });
+
+        async function markInvoicePaid(invoiceId) {
+            try {
+                await api.updateInvoiceStatus(currentTenantId, invoiceId, 'paid');
+                await loadInvoices();
+            } catch (error) {
+                alert('Failed to update invoice: ' + error.message);
+            }
+        }
+
+        function switchTenant() {
+            localStorage.removeItem('currentTenantId');
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

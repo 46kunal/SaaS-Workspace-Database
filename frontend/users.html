@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users - SaaS Workspace</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dashboard-page">
+    <header class="header">
+        <div class="container">
+            <div class="flex flex-between flex-center">
+                <div>
+                    <h1>SaaS Workspace Platform</h1>
+                    <div style="color: var(--gray-600); margin-top: 4px;">User and role management</div>
+                </div>
+                <div id="tenant-info" style="text-align: right;">
+                    <span id="tenant-name">Loading...</span>
+                    <button class="btn btn-sm btn-primary" onclick="window.location.href='index.html'" style="margin-left: 12px;">+ New Tenant</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchTenant()" style="margin-left: 12px;">Switch</button>
+                    <button class="btn btn-sm btn-outline" onclick="window.location.href='settings.html'" style="margin-left: 8px;">Settings</button>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="dashboard.html">Dashboard</a>
+                <a href="workspaces.html">Workspaces</a>
+                <a href="users.html" class="active">Users</a>
+                <a href="usage.html">Usage</a>
+                <a href="invoices.html">Invoices</a>
+                <a href="settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card hero-card mb-4">
+            <div class="flex flex-between flex-center gap-4 hero-card-inner">
+                <div>
+                    <div class="eyebrow">Dedicated user screen</div>
+                    <h2 style="margin: 6px 0 10px; border: none; padding: 0;">Keep team members and roles on one page</h2>
+                    <p class="hero-copy">This page isolates user administration so workspaces, usage, and billing can live elsewhere without clutter.</p>
+                </div>
+                <div class="hero-points">
+                    <div class="hero-point"><strong>Team members</strong><span>List and remove users for the active tenant.</span></div>
+                    <div class="hero-point"><strong>Roles</strong><span>Use custom role names without changing the backend.</span></div>
+                    <div class="hero-point"><strong>Simple flow</strong><span>Add, review, and remove users from one focused view.</span></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-2 mb-4">
+            <div class="stat-card">
+                <h3>Team Members</h3>
+                <div class="value" id="user-count">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Admin Users</h3>
+                <div class="value" id="admin-count">-</div>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="flex flex-between flex-center mb-4">
+                <h2 style="margin: 0; border: none; padding: 0;">Add Team Member</h2>
+                <button class="btn btn-sm btn-primary" onclick="showCreateUserModal()">+ Add User</button>
+            </div>
+            <p style="margin-top: -8px; color: var(--gray-600);">This opens a modal so the member list stays readable.</p>
+        </div>
+
+        <div class="card" id="users-section">
+            <div class="flex flex-between flex-center mb-4">
+                <h2 style="margin: 0; border: none; padding: 0;">Team Members</h2>
+            </div>
+            <div id="users-list">
+                <div class="loading"><div class="spinner"></div></div>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal-overlay" id="user-modal">
+        <div class="modal">
+            <h2>Add Team Member</h2>
+            <div id="user-modal-alert"></div>
+            <form id="user-form">
+                <div class="form-group">
+                    <label for="user-email">Email</label>
+                    <input type="email" id="user-email" placeholder="user@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-name">Full Name</label>
+                    <input type="text" id="user-name" placeholder="Jane Doe" required>
+                </div>
+                <div class="form-group">
+                    <label for="user-role">Role</label>
+                    <input type="text" id="user-role" list="role-suggestions" placeholder="e.g. admin, devops, finance, manager" required>
+                    <datalist id="role-suggestions">
+                        <option value="member"></option>
+                        <option value="admin"></option>
+                        <option value="viewer"></option>
+                        <option value="developer"></option>
+                        <option value="devops"></option>
+                        <option value="finance"></option>
+                        <option value="manager"></option>
+                    </datalist>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-outline" onclick="closeModal('user-modal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        let currentTenantId = null;
+        let currentTenant = null;
+        let currentUsers = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentTenantId = getCurrentTenantId();
+            if (!currentTenantId) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                currentTenant = await api.getTenant(currentTenantId);
+                document.getElementById('tenant-name').textContent = currentTenant.name;
+                await loadUsers();
+            } catch (error) {
+                console.error('Failed to load users page:', error);
+            }
+        });
+
+        async function loadUsers() {
+            const container = document.getElementById('users-list');
+            try {
+                currentUsers = await api.getUsers(currentTenantId);
+                document.getElementById('user-count').textContent = currentUsers.length;
+                document.getElementById('admin-count').textContent = currentUsers.filter(user => user.role === 'admin').length;
+
+                if (currentUsers.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><h3>No team members</h3><p>Add your first team member</p></div>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr><th>Name</th><th>Email</th><th>Role</th><th>Actions</th></tr>
+                            </thead>
+                            <tbody>
+                                ${currentUsers.map(user => `
+                                    <tr>
+                                        <td>${user.full_name}</td>
+                                        <td>${user.email}</td>
+                                        <td><span class="badge ${getStatusBadgeClass(user.role)}">${user.role}</span></td>
+                                        <td>
+                                            <button class="btn btn-sm btn-danger" onclick="deleteUser(${user.id})">Remove</button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+            }
+        }
+
+        function showCreateUserModal() {
+            document.getElementById('user-modal').classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        document.getElementById('user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('user-email').value.trim();
+            const name = document.getElementById('user-name').value.trim();
+            const role = document.getElementById('user-role').value.trim() || 'member';
+
+            try {
+                await api.createUser(currentTenantId, email, name, role);
+                closeModal('user-modal');
+                document.getElementById('user-email').value = '';
+                document.getElementById('user-name').value = '';
+                document.getElementById('user-role').value = '';
+                await loadUsers();
+            } catch (error) {
+                showAlert('user-modal-alert', error.message, 'error');
+            }
+        });
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to remove this user?')) return;
+            try {
+                await api.deleteUser(currentTenantId, userId);
+                await loadUsers();
+            } catch (error) {
+                alert('Failed to remove user: ' + error.message);
+            }
+        }
+
+        function switchTenant() {
+            localStorage.removeItem('currentTenantId');
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

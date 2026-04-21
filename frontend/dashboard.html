@@ -1,22 +1,233 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>Workspace Dashboard</title>
-	<link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - SaaS Workspace</title>
+    <link rel="stylesheet" href="styles.css">
 </head>
-<body>
-	<main class="container">
-		<h1>Dashboard</h1>
-		<section class="card">
-			<h2>Tenants</h2>
-			<p>Placeholder section for tenant data.</p>
-		</section>
-		<section class="card">
-			<h2>Usage</h2>
-			<p>Placeholder charts for API calls and storage.</p>
-		</section>
-	</main>
+<body class="dashboard-page">
+    <header class="header">
+        <div class="container">
+            <div class="flex flex-between flex-center">
+                <div>
+                    <h1>SaaS Workspace Platform</h1>
+                    <div style="color: var(--gray-600); margin-top: 4px;">Overview and navigation hub</div>
+                </div>
+                <div id="tenant-info" style="text-align: right;">
+                    <span id="tenant-name">Loading...</span>
+                    <button class="btn btn-sm btn-primary" onclick="window.location.href='index.html'" style="margin-left: 12px;">+ New Tenant</button>
+                    <button class="btn btn-sm btn-outline" onclick="switchTenant()" style="margin-left: 12px;">Switch</button>
+                    <button class="btn btn-sm btn-outline" onclick="window.location.href='settings.html'" style="margin-left: 8px;">Settings</button>
+                </div>
+            </div>
+            <nav class="nav">
+                <a href="dashboard.html" class="active">Dashboard</a>
+                <a href="workspaces.html">Workspaces</a>
+                <a href="users.html">Users</a>
+                <a href="usage.html">Usage</a>
+                <a href="invoices.html">Invoices</a>
+                <a href="settings.html">Settings</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card hero-card mb-4">
+            <div class="flex flex-between flex-center gap-4 hero-card-inner">
+                <div>
+                    <div class="eyebrow">Multi-tenant workspace overview</div>
+                    <h2 style="margin: 6px 0 10px; border: none; padding: 0;">Shared database, isolated tenant data, usage-based billing</h2>
+                    <p class="hero-copy">This page is the tenant home screen: current plan, team size, monthly activity, billing status, and shortcuts in one place.</p>
+                </div>
+                <div class="hero-points">
+                    <div class="hero-point"><strong>Tenant snapshot</strong><span>See the organization, plan, and domain.</span></div>
+                    <div class="hero-point"><strong>Activity pulse</strong><span>Track usage and billing movement this month.</span></div>
+                    <div class="hero-point"><strong>Fast actions</strong><span>Jump to the focused pages from here.</span></div>
+                </div>
+            </div>
+        </section>
+
+        <div class="grid grid-4 mb-4">
+            <div class="stat-card">
+                <h3>Workspaces</h3>
+                <div class="value" id="stat-workspaces">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Users</h3>
+                <div class="value" id="stat-users">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>Pending Invoices</h3>
+                <div class="value" id="stat-invoices">-</div>
+            </div>
+            <div class="stat-card">
+                <h3>API Calls (Month)</h3>
+                <div class="value" id="stat-api-calls">-</div>
+            </div>
+        </div>
+
+        <div class="grid grid-3 mb-4">
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Tenant Snapshot</h2>
+                </div>
+                <div id="tenant-summary"></div>
+            </div>
+
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">This Month</h2>
+                </div>
+                <div class="grid grid-2" id="month-summary"></div>
+            </div>
+
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Quick Actions</h2>
+                </div>
+                <div class="dashboard-quick-actions">
+                    <a class="dashboard-action" href="workspaces.html">
+                        <strong>Workspaces</strong>
+                        <span>Manage deployments and workspace records</span>
+                    </a>
+                    <a class="dashboard-action" href="usage.html">
+                        <strong>Usage</strong>
+                        <span>Log usage events and review trends</span>
+                    </a>
+                    <a class="dashboard-action" href="invoices.html">
+                        <strong>Invoices</strong>
+                        <span>Generate billing records and mark paid</span>
+                    </a>
+                    <a class="dashboard-action" href="settings.html">
+                        <strong>Settings</strong>
+                        <span>Update tenant profile or delete tenant</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Recent Usage</h2>
+                    <a class="btn btn-sm btn-outline" href="usage.html">Open Usage</a>
+                </div>
+                <div id="recent-usage-list">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="flex flex-between flex-center mb-4">
+                    <h2 style="margin: 0; border: none; padding: 0;">Recent Billing</h2>
+                    <a class="btn btn-sm btn-outline" href="invoices.html">Open Invoices</a>
+                </div>
+                <div id="recent-invoices-list">
+                    <div class="loading"><div class="spinner"></div></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="script.js"></script>
+    <script>
+        let currentTenantId = null;
+        let currentTenant = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            currentTenantId = getCurrentTenantId();
+            if (!currentTenantId) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            try {
+                currentTenant = await api.getTenant(currentTenantId);
+                document.getElementById('tenant-name').textContent = currentTenant.name;
+                await loadSummary();
+            } catch (error) {
+                console.error('Failed to load dashboard summary:', error);
+            }
+        });
+
+        async function loadSummary() {
+            const [workspaces, users, invoices, usage] = await Promise.all([
+                api.getWorkspaces(currentTenantId),
+                api.getUsers(currentTenantId),
+                api.getInvoices(currentTenantId),
+                api.getUsage(currentTenantId)
+            ]);
+
+            const now = new Date();
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+            let totalApiCalls = 0;
+            try {
+                const usageSummary = await api.getUsageSummary(currentTenantId, startOfMonth, endOfMonth);
+                totalApiCalls = usageSummary.total_api_calls || 0;
+            } catch {
+                totalApiCalls = 0;
+            }
+
+            const totalStorage = usage.reduce((sum, row) => sum + Number(row.storage_mb || 0), 0);
+            const runningWorkspaces = workspaces.length;
+            const paidInvoices = invoices.filter((invoice) => invoice.status === 'paid').length;
+            const pendingInvoices = invoices.filter((invoice) => invoice.status === 'pending').length;
+
+            document.getElementById('stat-workspaces').textContent = workspaces.length;
+            document.getElementById('stat-users').textContent = users.length;
+            document.getElementById('stat-invoices').textContent = pendingInvoices;
+            document.getElementById('stat-api-calls').textContent = totalApiCalls.toLocaleString();
+
+            document.getElementById('tenant-summary').innerHTML = `
+                <div class="dashboard-meta-stack">
+                    <div><span>Tenant</span><strong>${currentTenant.name}</strong></div>
+                    <div><span>Domain</span><strong>${currentTenant.domain || '-'}</strong></div>
+                    <div><span>Plan ID</span><strong>#${currentTenant.plan_id}</strong></div>
+                    <div><span>Workspaces</span><strong>${runningWorkspaces}</strong></div>
+                </div>
+            `;
+
+            document.getElementById('month-summary').innerHTML = `
+                <div class="stat-card"><h3>Paid Invoices</h3><div class="value">${paidInvoices}</div></div>
+                <div class="stat-card"><h3>Storage</h3><div class="value">${totalStorage.toFixed(2)} MB</div></div>
+                <div class="stat-card"><h3>Usage Records</h3><div class="value">${usage.length}</div></div>
+                <div class="stat-card"><h3>Team Members</h3><div class="value">${users.length}</div></div>
+            `;
+
+            const recentUsage = usage.slice(0, 4);
+            document.getElementById('recent-usage-list').innerHTML = recentUsage.length === 0
+                ? '<div class="empty-state"><h3>No usage yet</h3><p>Record usage on the Usage page to build activity history.</p></div>'
+                : `<div class="timeline">${recentUsage.map(row => `
+                    <div class="timeline-item">
+                        <div class="timeline-dot"></div>
+                        <div>
+                            <strong>${formatDate(row.usage_date)}</strong>
+                            <p>${row.api_calls.toLocaleString()} API calls • ${Number(row.storage_mb).toFixed(2)} MB • Workspace ${row.workspace_id}</p>
+                        </div>
+                    </div>
+                `).join('')}</div>`;
+
+            const recentInvoices = invoices.slice(0, 4);
+            document.getElementById('recent-invoices-list').innerHTML = recentInvoices.length === 0
+                ? '<div class="empty-state"><h3>No invoices yet</h3><p>Generate an invoice from the Invoices page.</p></div>'
+                : `<div class="timeline">${recentInvoices.map(invoice => `
+                    <div class="timeline-item">
+                        <div class="timeline-dot timeline-dot-billing"></div>
+                        <div>
+                            <strong>${formatDate(invoice.period_start)} - ${formatDate(invoice.period_end)}</strong>
+                            <p>${formatCurrency(invoice.total_amount)} • ${invoice.status}</p>
+                        </div>
+                    </div>
+                `).join('')}</div>`;
+        }
+
+        function switchTenant() {
+            localStorage.removeItem('currentTenantId');
+            window.location.href = 'index.html';
+        }
+    </script>
 </body>
 </html>
